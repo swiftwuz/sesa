@@ -49,6 +49,7 @@ func run(args []string, userConfigDir func() (string, error), lookPath func(stri
 	codexPath, err := lookPath("codex")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sesa: codex executable not found in PATH")
+		fmt.Fprintln(os.Stderr, "Install the Codex CLI: https://developers.openai.com/codex/cli")
 		return 127
 	}
 
