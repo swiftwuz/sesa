@@ -1,7 +1,7 @@
 # Sesa runtime state and isolated Codex homes
-.sesa/
-codex-homes/
-contexts/
+/.sesa/
+/codex-homes/
+/contexts/
 
 # Codex authentication material must never enter this repository
 auth.json
@@ -28,4 +28,3 @@ coverage/
 .vscode/
 !.vscode/extensions.json
 !.vscode/settings.json
-
