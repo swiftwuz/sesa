@@ -16,6 +16,7 @@ const helpText = `Sesa switches safely between isolated Codex accounts.
 
 Usage:
   sesa help
+  sesa doctor
   sesa list
   sesa login <context>
   sesa status <context>
@@ -23,6 +24,7 @@ Usage:
 
 Commands:
   help              Show this help
+  doctor            Diagnose the Codex installation and isolated contexts
   list              List available contexts
   login <context>   Log in through the official Codex CLI
   status <context>  Show the official Codex login status
@@ -33,6 +35,7 @@ with a letter. Pass Codex arguments after --.`
 
 const usage = `Usage:
   sesa help
+  sesa doctor
   sesa list
   sesa login <context>
   sesa status <context>
@@ -40,6 +43,8 @@ const usage = `Usage:
 
 type runner interface {
 	Check() error
+	Version() (string, error)
+	LoginStatus(home string) error
 	Run(home string, args []string) error
 }
 
@@ -77,6 +82,9 @@ func (a App) Run(args []string) int {
 	}
 	store := contexts.New(configDir)
 
+	if inv.action == actionDoctor {
+		return a.doctor(store)
+	}
 	if inv.action == actionList {
 		return a.list(store)
 	}
@@ -103,6 +111,53 @@ func (a App) Run(args []string) int {
 		return a.codexError(err)
 	}
 
+	return 0
+}
+
+func (a App) doctor(store contexts.Store) int {
+	fmt.Fprintln(a.stdout, "Sesa doctor")
+	healthy := true
+
+	version, err := a.codex.Version()
+	if err != nil {
+		fmt.Fprintf(a.stdout, "✗ Codex CLI: %v\n", err)
+		healthy = false
+	} else {
+		fmt.Fprintf(a.stdout, "✓ Codex CLI found (%s)\n", version)
+	}
+
+	if err := store.CheckStorage(); err != nil {
+		fmt.Fprintf(a.stdout, "✗ Context storage: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(a.stdout, "✓ Context storage accessible")
+
+	names, err := store.List()
+	if err != nil {
+		fmt.Fprintf(a.stdout, "✗ Context discovery: %v\n", err)
+		return 1
+	}
+	if len(names) == 0 {
+		fmt.Fprintln(a.stdout, "✓ No contexts configured")
+	}
+	for _, name := range names {
+		if err := store.Inspect(name); err != nil {
+			fmt.Fprintf(a.stdout, "✗ %s: unsafe context home: %v\n", name, err)
+			healthy = false
+			continue
+		}
+		fmt.Fprintf(a.stdout, "✓ %s: isolated home\n", name)
+		if err := a.codex.LoginStatus(store.Home(name)); err != nil {
+			fmt.Fprintf(a.stdout, "✗ %s: not authenticated\n", name)
+			healthy = false
+		} else {
+			fmt.Fprintf(a.stdout, "✓ %s: authenticated\n", name)
+		}
+	}
+
+	if !healthy {
+		return 1
+	}
 	return 0
 }
 

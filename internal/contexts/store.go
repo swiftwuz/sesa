@@ -29,25 +29,73 @@ func (s Store) Home(name string) string {
 	return filepath.Join(s.root, name, "codex")
 }
 
+func (s Store) CheckStorage() error {
+	info, err := os.Lstat(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("context storage must not be a symbolic link")
+	}
+	if !info.IsDir() {
+		return errors.New("context storage is not a directory")
+	}
+	return nil
+}
+
 func (s Store) Ensure(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
 	}
-	return os.MkdirAll(s.Home(name), 0o700)
+	if err := os.MkdirAll(s.root, 0o700); err != nil {
+		return err
+	}
+	if err := s.CheckStorage(); err != nil {
+		return err
+	}
+	if err := ensureDirectory(filepath.Dir(s.Home(name))); err != nil {
+		return err
+	}
+	return ensureDirectory(s.Home(name))
 }
 
 func (s Store) Exists(name string) (bool, error) {
 	if err := ValidateName(name); err != nil {
 		return false, err
 	}
-	info, err := os.Stat(s.Home(name))
+	info, err := os.Lstat(s.Home(name))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("%s must not be a symbolic link", s.Home(name))
+	}
 	return info.IsDir(), nil
+}
+
+func (s Store) Inspect(name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	for _, path := range []string{filepath.Dir(s.Home(name)), s.Home(name)} {
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%s must not be a symbolic link", path)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%s is not a directory", path)
+		}
+	}
+	return nil
 }
 
 func (s Store) List() ([]string, error) {
@@ -61,7 +109,13 @@ func (s Store) List() ([]string, error) {
 
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() || ValidateName(entry.Name()) != nil {
+		if ValidateName(entry.Name()) != nil {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("context %q must not be a symbolic link", entry.Name())
+		}
+		if !entry.IsDir() {
 			continue
 		}
 		exists, err := s.Exists(entry.Name())
@@ -73,4 +127,21 @@ func (s Store) List() ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+func ensureDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return os.Mkdir(path, 0o700)
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s must not be a symbolic link", path)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", path)
+	}
+	return nil
 }

@@ -14,6 +14,7 @@ func TestParseArgs(t *testing.T) {
 		{name: "help", args: []string{"help"}, want: invocation{action: actionHelp}},
 		{name: "short help", args: []string{"-h"}, want: invocation{action: actionHelp}},
 		{name: "long help", args: []string{"--help"}, want: invocation{action: actionHelp}},
+		{name: "doctor", args: []string{"doctor"}, want: invocation{action: actionDoctor}},
 		{name: "list", args: []string{"list"}, want: invocation{action: actionList}},
 		{name: "login", args: []string{"login", "personal"}, want: invocation{action: actionLogin, context: "personal", codexArgs: []string{"login"}}},
 		{name: "status", args: []string{"status", "personal"}, want: invocation{action: actionStatus, context: "personal", codexArgs: []string{"login", "status"}}},
@@ -38,6 +39,7 @@ func TestParseArgsRejectsUnsafeOrAmbiguousInput(t *testing.T) {
 	tests := [][]string{
 		nil,
 		{"help", "extra"},
+		{"doctor", "extra"},
 		{"run"},
 		{"list", "work"},
 		{"run", "../work"},

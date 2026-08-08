@@ -92,3 +92,32 @@ func TestListReturnsEmptyWhenRootDoesNotExist(t *testing.T) {
 		t.Fatalf("List() = %q, want no contexts", got)
 	}
 }
+
+func TestCheckStorageAllowsMissingRoot(t *testing.T) {
+	if err := New(t.TempDir()).CheckStorage(); err != nil {
+		t.Fatalf("CheckStorage() error = %v", err)
+	}
+}
+
+func TestInspectRejectsSymlinkedCodexHome(t *testing.T) {
+	store := New(t.TempDir())
+	if err := store.Ensure("personal"); err != nil {
+		t.Fatal(err)
+	}
+	home := store.Home("personal")
+	if err := os.Remove(home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), home); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	if err := store.Inspect("personal"); err == nil {
+		t.Fatal("Inspect() accepted a symlinked Codex home")
+	}
+	if err := store.Ensure("personal"); err == nil {
+		t.Fatal("Ensure() accepted a symlinked Codex home")
+	}
+	if exists, err := store.Exists("personal"); err == nil || exists {
+		t.Fatalf("Exists() accepted a symlinked Codex home: exists=%t, err=%v", exists, err)
+	}
+}

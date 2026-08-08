@@ -11,6 +11,7 @@ type action uint8
 
 const (
 	actionHelp action = iota
+	actionDoctor
 	actionList
 	actionLogin
 	actionStatus
@@ -31,6 +32,8 @@ func parseArgs(args []string) (invocation, error) {
 	switch args[0] {
 	case "help", "-h", "--help":
 		return parseStandalone(args, "help", actionHelp)
+	case "doctor":
+		return parseStandalone(args, "doctor", actionDoctor)
 	case "list":
 		return parseStandalone(args, "list", actionList)
 	default:

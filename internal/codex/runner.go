@@ -23,6 +23,30 @@ func (r Runner) Check() error {
 	return nil
 }
 
+func (r Runner) Version() (string, error) {
+	path, err := exec.LookPath("codex")
+	if err != nil {
+		return "", ErrNotFound
+	}
+	output, err := exec.Command(path, "--version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func (r Runner) LoginStatus(home string) error {
+	path, err := exec.LookPath("codex")
+	if err != nil {
+		return ErrNotFound
+	}
+	cmd := exec.Command(path, "login", "status")
+	cmd.Env = WithEnvironment(os.Environ(), "CODEX_HOME", home)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	return cmd.Run()
+}
+
 func (r Runner) Run(home string, args []string) error {
 	path, err := exec.LookPath("codex")
 	if err != nil {
