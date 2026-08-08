@@ -1,0 +1,31 @@
+# Sesa runtime state and isolated Codex homes
+.sesa/
+codex-homes/
+contexts/
+
+# Codex authentication material must never enter this repository
+auth.json
+**/auth.json
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Go build and test output
+/sesa
+*.test
+*.out
+coverage/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
