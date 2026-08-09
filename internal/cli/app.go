@@ -12,6 +12,7 @@ import (
 	"sesa/internal/codex"
 	"sesa/internal/contexts"
 	"sesa/internal/mappings"
+	"sesa/internal/protocol"
 	"sesa/internal/repository"
 	"sesa/internal/vscode"
 )
@@ -21,7 +22,7 @@ const helpText = `Sesa switches safely between isolated Codex accounts.
 Usage:
   sesa help
   sesa doctor
-  sesa list
+  sesa list [--json]
   sesa link <context>
   sesa current [--json]
   sesa unlink
@@ -33,7 +34,7 @@ Usage:
 Commands:
   help              Show this help
   doctor            Diagnose the Codex installation and isolated contexts
-  list              List available contexts
+  list [--json]     List available contexts
   link <context>    Map the current Git repository to a context
   current [--json]  Show the current repository's mapped context
   unlink            Remove the current repository's mapping
@@ -48,7 +49,7 @@ with a letter. Pass Codex arguments after --.`
 const usage = `Usage:
   sesa help
   sesa doctor
-  sesa list
+  sesa list [--json]
   sesa link <context>
   sesa current [--json]
   sesa unlink
@@ -116,7 +117,7 @@ func (a App) Run(args []string) int {
 	case actionDoctor:
 		return a.doctor(store, mappingStore)
 	case actionList:
-		return a.list(store)
+		return a.list(store, inv.jsonOutput)
 	case actionLink, actionCurrent, actionUnlink:
 		return a.repositoryCommand(inv, store, mappingStore)
 	case actionCode:
@@ -312,11 +313,14 @@ func (a App) codexError(err error) int {
 	return 1
 }
 
-func (a App) list(store contexts.Store) int {
+func (a App) list(store contexts.Store, jsonOutput bool) int {
 	names, err := store.List()
 	if err != nil {
 		fmt.Fprintf(a.stderr, "sesa: list contexts: %v\n", err)
 		return 1
+	}
+	if jsonOutput {
+		return a.writeJSON(protocol.NewContextList(names))
 	}
 	if len(names) == 0 {
 		fmt.Fprintln(a.stdout, "No contexts found.")

@@ -48,7 +48,10 @@ export function presentStatus(input: StatusInput): StatusPresentation {
   if (!input.current?.mapped) {
     return {
       text: `$(warning) SESA: ${active} · UNMAPPED`,
-      tooltip: "This repository is not mapped to a Sesa context.",
+      tooltip:
+        input.current === undefined
+          ? "This repository is not mapped to a Sesa context."
+          : `Repository: ${input.current.repository}\nNo Sesa context mapping.`,
       emphasis: "warning",
     };
   }
@@ -57,12 +60,12 @@ export function presentStatus(input: StatusInput): StatusPresentation {
   if (input.current.context !== input.activeContext) {
     return {
       text: `$(error) SESA: ${active} · EXPECTS ${expected}`,
-      tooltip: `Active context ${active} conflicts with repository mapping ${expected}.`,
+      tooltip: `Repository: ${input.current.repository}\nActive context: ${active}\nExpected context: ${expected}.`,
       emphasis: "error",
     };
   }
   return {
     text: `$(shield) SESA: ${active}`,
-    tooltip: `Active context and repository mapping: ${active}.`,
+    tooltip: `Repository: ${input.current.repository}\nActive and expected context: ${active}.`,
   };
 }

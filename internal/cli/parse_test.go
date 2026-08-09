@@ -16,6 +16,7 @@ func TestParseArgs(t *testing.T) {
 		{name: "long help", args: []string{"--help"}, want: invocation{action: actionHelp}},
 		{name: "doctor", args: []string{"doctor"}, want: invocation{action: actionDoctor}},
 		{name: "list", args: []string{"list"}, want: invocation{action: actionList}},
+		{name: "list JSON", args: []string{"list", "--json"}, want: invocation{action: actionList, jsonOutput: true}},
 		{name: "link", args: []string{"link", "work"}, want: invocation{action: actionLink, context: "work"}},
 		{name: "current", args: []string{"current"}, want: invocation{action: actionCurrent}},
 		{name: "current JSON", args: []string{"current", "--json"}, want: invocation{action: actionCurrent, jsonOutput: true}},

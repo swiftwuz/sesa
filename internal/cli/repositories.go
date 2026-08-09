@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -73,13 +72,7 @@ func (a App) writeCurrentJSON(root, context string, mapped bool) int {
 	if mapped {
 		selected = &context
 	}
-	encoder := json.NewEncoder(a.stdout)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(protocol.NewCurrentRepository(root, selected)); err != nil {
-		fmt.Fprintf(a.stderr, "sesa: encode JSON output: %v\n", err)
-		return 1
-	}
-	return 0
+	return a.writeJSON(protocol.NewCurrentRepository(root, selected))
 }
 
 func (a App) unlinkRepository(root string, mappingStore mappings.Store) int {

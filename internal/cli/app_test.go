@@ -286,6 +286,40 @@ func TestList(t *testing.T) {
 	}
 }
 
+func TestListJSON(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"work", "personal"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app, stdout, stderr := testApp(configDir, &fakeRunner{})
+	if got := app.Run([]string{"list", "--json"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	var response protocol.ContextList
+	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
+	}
+	if response.ProtocolVersion != 1 || !reflect.DeepEqual(response.Contexts, []string{"personal", "work"}) {
+		t.Fatalf("response = %#v", response)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestListJSONUsesEmptyArrayWhenNoContextsExist(t *testing.T) {
+	app, stdout, _ := testApp(t.TempDir(), &fakeRunner{})
+	if got := app.Run([]string{"list", "--json"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	if !strings.Contains(stdout.String(), `"contexts": []`) {
+		t.Fatalf("stdout = %q, want empty JSON array", stdout.String())
+	}
+}
+
 func TestHelpDoesNotInspectConfiguration(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	called := false

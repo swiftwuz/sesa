@@ -42,7 +42,7 @@ func parseArgs(args []string) (invocation, error) {
 	case "doctor":
 		return parseStandalone(args, "doctor", actionDoctor)
 	case "list":
-		return parseStandalone(args, "list", actionList)
+		return parseJSONOption(args, "list", actionList)
 	case "current":
 		return parseCurrent(args)
 	case "unlink":
@@ -57,13 +57,17 @@ func parseArgs(args []string) (invocation, error) {
 }
 
 func parseCurrent(args []string) (invocation, error) {
+	return parseJSONOption(args, "current", actionCurrent)
+}
+
+func parseJSONOption(args []string, command string, commandAction action) (invocation, error) {
 	if len(args) == 1 {
-		return invocation{action: actionCurrent}, nil
+		return invocation{action: commandAction}, nil
 	}
 	if len(args) == 2 && args[1] == "--json" {
-		return invocation{action: actionCurrent, jsonOutput: true}, nil
+		return invocation{action: commandAction, jsonOutput: true}, nil
 	}
-	return invocation{}, errors.New("current only accepts --json")
+	return invocation{}, fmt.Errorf("%s only accepts --json", command)
 }
 
 func parseCode(args []string) (invocation, error) {

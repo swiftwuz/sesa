@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseActiveContext, parseCurrentRepository } from "./protocol.js";
+import {
+  parseActiveContext,
+  parseContextList,
+  parseCurrentRepository,
+} from "./protocol.js";
 
 test("parses the version 1 mapped response", () => {
   const response = parseCurrentRepository(JSON.stringify({
@@ -27,4 +31,13 @@ test("only accepts safe active context names", () => {
   assert.equal(parseActiveContext("work"), "work");
   assert.equal(parseActiveContext("../work"), undefined);
   assert.equal(parseActiveContext(undefined), undefined);
+});
+
+test("parses a versioned context list", () => {
+  const response = parseContextList(JSON.stringify({
+    protocolVersion: 1,
+    contexts: ["personal", "work"],
+  }));
+
+  assert.deepEqual(response.contexts, ["personal", "work"]);
 });

@@ -26,8 +26,21 @@ export const currentRepositorySchema = z.discriminatedUnion("mapped", [
 
 export type CurrentRepository = z.infer<typeof currentRepositorySchema>;
 
+export const contextListSchema = z
+  .object({
+    protocolVersion: z.literal(1),
+    contexts: z.array(contextNameSchema),
+  })
+  .strict();
+
+export type ContextList = z.infer<typeof contextListSchema>;
+
 export function parseCurrentRepository(output: string): CurrentRepository {
   return currentRepositorySchema.parse(JSON.parse(output));
+}
+
+export function parseContextList(output: string): ContextList {
+  return contextListSchema.parse(JSON.parse(output));
 }
 
 export function parseActiveContext(
