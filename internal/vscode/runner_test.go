@@ -21,7 +21,7 @@ func TestRunPassesIsolationArgumentsAndEnvironment(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "invocation")
 	stub := filepath.Join(binDir, "code")
 	script := "#!/bin/sh\n" +
-		"printf '%s\\n' \"$CODEX_HOME\" \"$@\" > \"$SESA_TEST_OUTPUT\"\n" +
+		"printf '%s\\n' \"$CODEX_HOME\" \"$SESA_CONTEXT\" \"$@\" > \"$SESA_TEST_OUTPUT\"\n" +
 		"printf 'code output'\n" +
 		"printf 'code error' >&2\n"
 	if err := os.WriteFile(stub, []byte(script), 0o700); err != nil {
@@ -29,10 +29,17 @@ func TestRunPassesIsolationArgumentsAndEnvironment(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir)
 	t.Setenv("SESA_TEST_OUTPUT", output)
+	t.Setenv("SESA_CONTEXT", "stale")
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	if err := (Runner{Stdout: stdout, Stderr: stderr}).Run("/contexts/personal/codex", "/contexts/personal/vscode", "/repos/project"); err != nil {
+	launch := Launch{
+		Context:     "personal",
+		CodexHome:   "/contexts/personal/codex",
+		UserDataDir: "/contexts/personal/vscode",
+		Target:      "/repos/project",
+	}
+	if err := (Runner{Stdout: stdout, Stderr: stderr}).Run(launch); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	data, err := os.ReadFile(output)
@@ -41,6 +48,7 @@ func TestRunPassesIsolationArgumentsAndEnvironment(t *testing.T) {
 	}
 	want := strings.Join([]string{
 		"/contexts/personal/codex",
+		"personal",
 		"--new-window",
 		"--user-data-dir",
 		"/contexts/personal/vscode",

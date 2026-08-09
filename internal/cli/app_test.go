@@ -28,21 +28,17 @@ type fakeRunner struct {
 }
 
 type fakeCodeRunner struct {
-	home        string
-	userDataDir string
-	target      string
-	checkErr    error
-	err         error
+	launch   vscode.Launch
+	checkErr error
+	err      error
 }
 
 func (f *fakeCodeRunner) Check() error {
 	return f.checkErr
 }
 
-func (f *fakeCodeRunner) Run(home, userDataDir, target string) error {
-	f.home = home
-	f.userDataDir = userDataDir
-	f.target = target
+func (f *fakeCodeRunner) Run(launch vscode.Launch) error {
+	f.launch = launch
 	return f.err
 }
 
@@ -96,14 +92,17 @@ func TestCodeLaunchesIsolatedVSCodeInstance(t *testing.T) {
 	if got := app.Run([]string{"code", "personal", "."}); got != 0 {
 		t.Fatalf("Run() exit code = %d, want 0", got)
 	}
-	if code.home != store.Home("personal") {
-		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("personal"))
+	if code.launch.Context != "personal" {
+		t.Fatalf("SESA_CONTEXT = %q, want personal", code.launch.Context)
 	}
-	if code.userDataDir != store.VSCodeUserData("personal") {
-		t.Fatalf("user data dir = %q, want %q", code.userDataDir, store.VSCodeUserData("personal"))
+	if code.launch.CodexHome != store.Home("personal") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.launch.CodexHome, store.Home("personal"))
 	}
-	if code.target != "/repos/project" {
-		t.Fatalf("target = %q, want /repos/project", code.target)
+	if code.launch.UserDataDir != store.VSCodeUserData("personal") {
+		t.Fatalf("user data dir = %q, want %q", code.launch.UserDataDir, store.VSCodeUserData("personal"))
+	}
+	if code.launch.Target != "/repos/project" {
+		t.Fatalf("target = %q, want /repos/project", code.launch.Target)
 	}
 	if !strings.Contains(stderr.String(), "Sesa VS Code context: PERSONAL") {
 		t.Fatalf("stderr = %q, want context banner", stderr.String())
@@ -118,7 +117,7 @@ func TestCodeRequiresExistingContext(t *testing.T) {
 	if got := app.Run([]string{"code", "missing"}); got != 1 {
 		t.Fatalf("Run() exit code = %d, want 1", got)
 	}
-	if code.home != "" {
+	if code.launch.CodexHome != "" {
 		t.Fatal("VS Code ran for an unknown context")
 	}
 	if !strings.Contains(stderr.String(), "does not exist") {
@@ -149,8 +148,8 @@ func TestCodeUsesRepositoryMapping(t *testing.T) {
 	if got := app.Run([]string{"code"}); got != 0 {
 		t.Fatalf("Run() exit code = %d, want 0", got)
 	}
-	if code.home != store.Home("work") {
-		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("work"))
+	if code.launch.CodexHome != store.Home("work") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.launch.CodexHome, store.Home("work"))
 	}
 }
 
@@ -174,7 +173,7 @@ func TestCodeMismatchRequiresConfirmation(t *testing.T) {
 	if got := app.Run([]string{"code", "personal"}); got != 1 {
 		t.Fatalf("Run() exit code = %d, want 1", got)
 	}
-	if code.home != "" {
+	if code.launch.CodexHome != "" {
 		t.Fatal("VS Code ran after mismatch was declined")
 	}
 	if !strings.Contains(stderr.String(), "mapped to WORK, but PERSONAL was requested") {
@@ -201,8 +200,8 @@ func TestCodeMismatchCanBeExplicitlyAllowed(t *testing.T) {
 	if got := app.Run([]string{"code", "personal", "--allow-mismatch"}); got != 0 {
 		t.Fatalf("Run() exit code = %d, want 0", got)
 	}
-	if code.home != store.Home("personal") {
-		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("personal"))
+	if code.launch.CodexHome != store.Home("personal") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.launch.CodexHome, store.Home("personal"))
 	}
 }
 

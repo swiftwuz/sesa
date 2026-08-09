@@ -66,7 +66,7 @@ type runner interface {
 
 type codeRunner interface {
 	Check() error
-	Run(home, userDataDir, target string) error
+	Run(vscode.Launch) error
 }
 
 type App struct {
@@ -151,7 +151,13 @@ func (a App) codeCommand(inv invocation, store contexts.Store, mappingStore mapp
 	}
 
 	fmt.Fprintf(a.stderr, "Sesa VS Code context: %s\n", strings.ToUpper(inv.context))
-	if err := a.code.Run(store.Home(inv.context), store.VSCodeUserData(inv.context), target); err != nil {
+	launch := vscode.Launch{
+		Context:     inv.context,
+		CodexHome:   store.Home(inv.context),
+		UserDataDir: store.VSCodeUserData(inv.context),
+		Target:      target,
+	}
+	if err := a.code.Run(launch); err != nil {
 		return a.codeError(err)
 	}
 	return 0

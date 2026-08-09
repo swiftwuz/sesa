@@ -1,0 +1,50 @@
+{
+  "name": "sesa-for-codex",
+  "displayName": "Sesa for Codex",
+  "description": "Shows the active Sesa Codex context and warns about repository mismatches.",
+  "version": "0.0.1",
+  "publisher": "sesa",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "codex",
+    "context",
+    "accounts"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "sesa.refreshStatus",
+        "title": "Sesa: Refresh Context Status"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "check": "tsc --noEmit",
+    "package": "npm run verify && vsce package --no-dependencies --out dist/sesa-for-codex.vsix",
+    "test": "tsx --test src/*.test.ts",
+    "verify": "npm run check && npm test && npm run build"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/vscode": "1.125.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.11",
+    "typescript": "7.0.2"
+  }
+}

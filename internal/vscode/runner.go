@@ -16,6 +16,13 @@ type Runner struct {
 	Stderr io.Writer
 }
 
+type Launch struct {
+	Context     string
+	CodexHome   string
+	UserDataDir string
+	Target      string
+}
+
 func (Runner) Check() error {
 	if _, err := exec.LookPath("code"); err != nil {
 		return ErrNotFound
@@ -23,14 +30,15 @@ func (Runner) Check() error {
 	return nil
 }
 
-func (r Runner) Run(home, userDataDir, target string) error {
+func (r Runner) Run(launch Launch) error {
 	path, err := exec.LookPath("code")
 	if err != nil {
 		return ErrNotFound
 	}
 
-	cmd := exec.Command(path, "--new-window", "--user-data-dir", userDataDir, target)
-	cmd.Env = codex.WithEnvironment(os.Environ(), "CODEX_HOME", home)
+	cmd := exec.Command(path, "--new-window", "--user-data-dir", launch.UserDataDir, launch.Target)
+	environment := codex.WithEnvironment(os.Environ(), "CODEX_HOME", launch.CodexHome)
+	cmd.Env = codex.WithEnvironment(environment, "SESA_CONTEXT", launch.Context)
 	cmd.Stdout = r.Stdout
 	cmd.Stderr = r.Stderr
 	return cmd.Run()

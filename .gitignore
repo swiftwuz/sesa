@@ -22,6 +22,10 @@ auth.json
 *.out
 coverage/
 
+# VS Code extension build and dependency output
+/vscode-extension/node_modules/
+/vscode-extension/dist/
+
 # Editors and operating systems
 .DS_Store
 .idea/
