@@ -9,6 +9,8 @@ import (
 
 	"sesa/internal/codex"
 	"sesa/internal/contexts"
+	"sesa/internal/mappings"
+	"sesa/internal/repository"
 )
 
 type fakeRunner struct {
@@ -46,10 +48,13 @@ func testApp(configDir string, runner *fakeRunner) (App, *bytes.Buffer, *bytes.B
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	return App{
-		userConfigDir: func() (string, error) { return configDir, nil },
-		codex:         runner,
-		stdout:        stdout,
-		stderr:        stderr,
+		userConfigDir:  func() (string, error) { return configDir, nil },
+		workingDir:     func() (string, error) { return "/project", nil },
+		repositoryRoot: func(string) (string, error) { return "", repository.ErrNotRepository },
+		codex:          runner,
+		stdin:          strings.NewReader(""),
+		stdout:         stdout,
+		stderr:         stderr,
 	}, stdout, stderr
 }
 
@@ -186,5 +191,120 @@ func TestDoctorFailsWhenContextIsLoggedOut(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "✗ personal: not authenticated") {
 		t.Fatalf("doctor output = %q", stdout.String())
+	}
+}
+
+func TestRepositoryMappingLifecycleAndMappedRun(t *testing.T) {
+	configDir := t.TempDir()
+	if err := contexts.New(configDir).Ensure("work"); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{}
+	app, stdout, _ := testApp(configDir, runner)
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"link", "work"}); got != 0 {
+		t.Fatalf("link exit code = %d", got)
+	}
+	if got := app.Run([]string{"current"}); got != 0 {
+		t.Fatalf("current exit code = %d", got)
+	}
+	if got := app.Run([]string{"run"}); got != 0 {
+		t.Fatalf("mapped run exit code = %d", got)
+	}
+	if runner.home != contexts.New(configDir).Home("work") {
+		t.Fatalf("mapped run home = %q", runner.home)
+	}
+	if !strings.Contains(stdout.String(), "WORK\n") {
+		t.Fatalf("output = %q, want mapped context", stdout.String())
+	}
+	if got := app.Run([]string{"unlink"}); got != 0 {
+		t.Fatalf("unlink exit code = %d", got)
+	}
+	if _, ok, err := mappings.New(configDir).Get("/repos/project"); err != nil || ok {
+		t.Fatalf("mapping remains after unlink: ok=%t err=%v", ok, err)
+	}
+}
+
+func TestLinkRequiresExistingContext(t *testing.T) {
+	app, _, stderr := testApp(t.TempDir(), &fakeRunner{})
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+	if got := app.Run([]string{"link", "missing"}); got != 1 {
+		t.Fatalf("link exit code = %d, want 1", got)
+	}
+	if !strings.Contains(stderr.String(), "does not exist") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestMappedRunRequiresMapping(t *testing.T) {
+	app, _, stderr := testApp(t.TempDir(), &fakeRunner{})
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+	if got := app.Run([]string{"run"}); got != 1 {
+		t.Fatalf("run exit code = %d, want 1", got)
+	}
+	if !strings.Contains(stderr.String(), "not mapped") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunMismatchRequiresConfirmation(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{}
+	app, _, stderr := testApp(configDir, runner)
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+	app.stdin = strings.NewReader("no\n")
+
+	if got := app.Run([]string{"run", "personal"}); got != 1 {
+		t.Fatalf("run exit code = %d, want 1", got)
+	}
+	if runner.home != "" {
+		t.Fatal("Codex ran after mismatch was declined")
+	}
+	if !strings.Contains(stderr.String(), "mapped to WORK, but PERSONAL was requested") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunMismatchCanBeConfirmedOrExplicitlyAllowed(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		args  []string
+		input string
+	}{
+		{name: "interactive confirmation", args: []string{"run", "personal"}, input: "yes\n"},
+		{name: "explicit flag", args: []string{"run", "personal", "--allow-mismatch"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			configDir := t.TempDir()
+			store := contexts.New(configDir)
+			for _, name := range []string{"personal", "work"} {
+				if err := store.Ensure(name); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+				t.Fatal(err)
+			}
+			runner := &fakeRunner{}
+			app, _, _ := testApp(configDir, runner)
+			app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+			app.stdin = strings.NewReader(tt.input)
+			if got := app.Run(tt.args); got != 0 {
+				t.Fatalf("run exit code = %d, want 0", got)
+			}
+			if runner.home != store.Home("personal") {
+				t.Fatalf("runner home = %q", runner.home)
+			}
+		})
 	}
 }

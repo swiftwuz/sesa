@@ -13,15 +13,19 @@ const (
 	actionHelp action = iota
 	actionDoctor
 	actionList
+	actionLink
+	actionCurrent
+	actionUnlink
 	actionLogin
 	actionStatus
 	actionRun
 )
 
 type invocation struct {
-	action    action
-	context   string
-	codexArgs []string
+	action        action
+	context       string
+	codexArgs     []string
+	allowMismatch bool
 }
 
 func parseArgs(args []string) (invocation, error) {
@@ -36,6 +40,12 @@ func parseArgs(args []string) (invocation, error) {
 		return parseStandalone(args, "doctor", actionDoctor)
 	case "list":
 		return parseStandalone(args, "list", actionList)
+	case "current":
+		return parseStandalone(args, "current", actionCurrent)
+	case "unlink":
+		return parseStandalone(args, "unlink", actionUnlink)
+	case "run":
+		return parseRun(args)
 	default:
 		return parseContextCommand(args)
 	}
@@ -59,12 +69,12 @@ func parseContextCommand(args []string) (invocation, error) {
 	}
 
 	switch command {
+	case "link":
+		return parseExactContext(args, actionLink, nil)
 	case "login":
 		return parseExactContext(args, actionLogin, []string{"login"})
 	case "status":
 		return parseExactContext(args, actionStatus, []string{"login", "status"})
-	case "run":
-		return parseRun(args)
 	default:
 		return invocation{}, fmt.Errorf("unknown command %q", command)
 	}
@@ -78,11 +88,32 @@ func parseExactContext(args []string, commandAction action, codexArgs []string) 
 }
 
 func parseRun(args []string) (invocation, error) {
-	if len(args) == 2 {
-		return invocation{action: actionRun, context: args[1]}, nil
+	inv := invocation{action: actionRun}
+	if len(args) == 1 {
+		return inv, nil
 	}
-	if args[2] != "--" {
+
+	index := 1
+	if args[index] != "--" && args[index] != "--allow-mismatch" {
+		if err := contexts.ValidateName(args[index]); err != nil {
+			return invocation{}, err
+		}
+		inv.context = args[index]
+		index++
+	}
+	if index < len(args) && args[index] == "--allow-mismatch" {
+		if inv.context == "" {
+			return invocation{}, errors.New("--allow-mismatch requires an explicit context")
+		}
+		inv.allowMismatch = true
+		index++
+	}
+	if index == len(args) {
+		return inv, nil
+	}
+	if args[index] != "--" {
 		return invocation{}, errors.New("put Codex arguments after --")
 	}
-	return invocation{action: actionRun, context: args[1], codexArgs: args[3:]}, nil
+	inv.codexArgs = args[index+1:]
+	return inv, nil
 }
