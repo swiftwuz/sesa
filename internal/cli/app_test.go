@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"sesa/internal/contexts"
 	"sesa/internal/mappings"
 	"sesa/internal/repository"
+	"sesa/internal/vscode"
 )
 
 type fakeRunner struct {
@@ -21,6 +23,25 @@ type fakeRunner struct {
 	versionErr     error
 	loginStatusErr map[string]error
 	err            error
+}
+
+type fakeCodeRunner struct {
+	home        string
+	userDataDir string
+	target      string
+	checkErr    error
+	err         error
+}
+
+func (f *fakeCodeRunner) Check() error {
+	return f.checkErr
+}
+
+func (f *fakeCodeRunner) Run(home, userDataDir, target string) error {
+	f.home = home
+	f.userDataDir = userDataDir
+	f.target = target
+	return f.err
 }
 
 func (f *fakeRunner) Check() error {
@@ -52,10 +73,75 @@ func testApp(configDir string, runner *fakeRunner) (App, *bytes.Buffer, *bytes.B
 		workingDir:     func() (string, error) { return "/project", nil },
 		repositoryRoot: func(string) (string, error) { return "", repository.ErrNotRepository },
 		codex:          runner,
+		code:           &fakeCodeRunner{},
 		stdin:          strings.NewReader(""),
 		stdout:         stdout,
 		stderr:         stderr,
 	}, stdout, stderr
+}
+
+func TestCodeLaunchesIsolatedVSCodeInstance(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	if err := store.Ensure("personal"); err != nil {
+		t.Fatal(err)
+	}
+	code := &fakeCodeRunner{}
+	app, _, stderr := testApp(configDir, &fakeRunner{})
+	app.code = code
+	app.workingDir = func() (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"code", "personal", "."}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	if code.home != store.Home("personal") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("personal"))
+	}
+	if code.userDataDir != store.VSCodeUserData("personal") {
+		t.Fatalf("user data dir = %q, want %q", code.userDataDir, store.VSCodeUserData("personal"))
+	}
+	if code.target != "/repos/project" {
+		t.Fatalf("target = %q, want /repos/project", code.target)
+	}
+	if !strings.Contains(stderr.String(), "Sesa VS Code context: PERSONAL") {
+		t.Fatalf("stderr = %q, want context banner", stderr.String())
+	}
+}
+
+func TestCodeRequiresExistingContext(t *testing.T) {
+	code := &fakeCodeRunner{}
+	app, _, stderr := testApp(t.TempDir(), &fakeRunner{})
+	app.code = code
+
+	if got := app.Run([]string{"code", "missing"}); got != 1 {
+		t.Fatalf("Run() exit code = %d, want 1", got)
+	}
+	if code.home != "" {
+		t.Fatal("VS Code ran for an unknown context")
+	}
+	if !strings.Contains(stderr.String(), "does not exist") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestCodeReportsMissingExecutable(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	if err := store.Ensure("work"); err != nil {
+		t.Fatal(err)
+	}
+	app, _, stderr := testApp(configDir, &fakeRunner{})
+	app.code = &fakeCodeRunner{checkErr: vscode.ErrNotFound}
+
+	if got := app.Run([]string{"code", "work"}); got != 127 {
+		t.Fatalf("Run() exit code = %d, want 127", got)
+	}
+	if !strings.Contains(stderr.String(), "code executable not found in PATH") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if _, err := os.Stat(store.VSCodeUserData("work")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("VS Code user data was created despite missing executable: %v", err)
+	}
 }
 
 func TestRunLaunchesCodexWithIsolatedHome(t *testing.T) {
@@ -166,6 +252,7 @@ func TestDoctorReportsHealthyContexts(t *testing.T) {
 	}
 	for _, wanted := range []string{
 		"✓ Codex CLI found (codex-cli 1.2.3)",
+		"✓ VS Code shell command found",
 		"✓ Context storage accessible",
 		"✓ personal: isolated home",
 		"✓ personal: authenticated",
@@ -175,6 +262,17 @@ func TestDoctorReportsHealthyContexts(t *testing.T) {
 		if !strings.Contains(stdout.String(), wanted) {
 			t.Errorf("doctor output missing %q:\n%s", wanted, stdout.String())
 		}
+	}
+}
+
+func TestDoctorReportsMissingVSCodeShellCommand(t *testing.T) {
+	app, stdout, _ := testApp(t.TempDir(), &fakeRunner{})
+	app.code = &fakeCodeRunner{checkErr: vscode.ErrNotFound}
+	if got := app.Run([]string{"doctor"}); got != 1 {
+		t.Fatalf("Run() exit code = %d, want 1", got)
+	}
+	if !strings.Contains(stdout.String(), "✗ VS Code shell command: code executable not found in PATH") {
+		t.Fatalf("doctor output = %q", stdout.String())
 	}
 }
 

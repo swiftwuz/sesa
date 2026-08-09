@@ -52,6 +52,21 @@ func TestEnsureAndExists(t *testing.T) {
 	}
 }
 
+func TestVSCodeUserDataIsIsolatedByContext(t *testing.T) {
+	store := New(t.TempDir())
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.EnsureVSCodeUserData(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if store.VSCodeUserData("personal") == store.VSCodeUserData("work") {
+		t.Fatal("different contexts resolved to the same VS Code user-data directory")
+	}
+}
+
 func TestFilesystemOperationsRejectInvalidNames(t *testing.T) {
 	store := New(t.TempDir())
 	if err := store.Ensure("../outside"); err == nil {
@@ -96,6 +111,26 @@ func TestListReturnsEmptyWhenRootDoesNotExist(t *testing.T) {
 func TestCheckStorageAllowsMissingRoot(t *testing.T) {
 	if err := New(t.TempDir()).CheckStorage(); err != nil {
 		t.Fatalf("CheckStorage() error = %v", err)
+	}
+}
+
+func TestOperationsRejectSymlinkedContextStorage(t *testing.T) {
+	configDir := t.TempDir()
+	store := New(configDir)
+	if err := os.MkdirAll(filepath.Dir(store.root), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), store.root); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+	if _, err := store.Exists("personal"); err == nil {
+		t.Fatal("Exists() accepted symlinked context storage")
+	}
+	if _, err := store.List(); err == nil {
+		t.Fatal("List() accepted symlinked context storage")
+	}
+	if err := store.Inspect("personal"); err == nil {
+		t.Fatal("Inspect() accepted symlinked context storage")
 	}
 }
 

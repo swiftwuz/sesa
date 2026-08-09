@@ -19,12 +19,14 @@ const (
 	actionLogin
 	actionStatus
 	actionRun
+	actionCode
 )
 
 type invocation struct {
 	action        action
 	context       string
 	codexArgs     []string
+	target        string
 	allowMismatch bool
 }
 
@@ -46,9 +48,28 @@ func parseArgs(args []string) (invocation, error) {
 		return parseStandalone(args, "unlink", actionUnlink)
 	case "run":
 		return parseRun(args)
+	case "code":
+		return parseCode(args)
 	default:
 		return parseContextCommand(args)
 	}
+}
+
+func parseCode(args []string) (invocation, error) {
+	if len(args) < 2 {
+		return invocation{}, errors.New("expected a context")
+	}
+	if len(args) > 3 {
+		return invocation{}, errors.New("code accepts one optional path")
+	}
+	if err := contexts.ValidateName(args[1]); err != nil {
+		return invocation{}, err
+	}
+	target := "."
+	if len(args) == 3 {
+		target = args[2]
+	}
+	return invocation{action: actionCode, context: args[1], target: target}, nil
 }
 
 func parseStandalone(args []string, command string, commandAction action) (invocation, error) {

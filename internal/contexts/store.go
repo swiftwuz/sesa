@@ -29,6 +29,10 @@ func (s Store) Home(name string) string {
 	return filepath.Join(s.root, name, "codex")
 }
 
+func (s Store) VSCodeUserData(name string) string {
+	return filepath.Join(s.root, name, "vscode-user-data")
+}
+
 func (s Store) CheckStorage() error {
 	info, err := os.Lstat(s.root)
 	if errors.Is(err, os.ErrNotExist) {
@@ -62,8 +66,18 @@ func (s Store) Ensure(name string) error {
 	return ensureDirectory(s.Home(name))
 }
 
+func (s Store) EnsureVSCodeUserData(name string) error {
+	if err := s.Inspect(name); err != nil {
+		return err
+	}
+	return ensureDirectory(s.VSCodeUserData(name))
+}
+
 func (s Store) Exists(name string) (bool, error) {
 	if err := ValidateName(name); err != nil {
+		return false, err
+	}
+	if err := s.CheckStorage(); err != nil {
 		return false, err
 	}
 	info, err := os.Lstat(s.Home(name))
@@ -83,6 +97,9 @@ func (s Store) Inspect(name string) error {
 	if err := ValidateName(name); err != nil {
 		return err
 	}
+	if err := s.CheckStorage(); err != nil {
+		return err
+	}
 	for _, path := range []string{filepath.Dir(s.Home(name)), s.Home(name)} {
 		info, err := os.Lstat(path)
 		if err != nil {
@@ -99,6 +116,9 @@ func (s Store) Inspect(name string) error {
 }
 
 func (s Store) List() ([]string, error) {
+	if err := s.CheckStorage(); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(s.root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil

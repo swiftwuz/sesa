@@ -6,12 +6,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"sesa/internal/codex"
 	"sesa/internal/contexts"
 	"sesa/internal/mappings"
 	"sesa/internal/repository"
+	"sesa/internal/vscode"
 )
 
 const helpText = `Sesa switches safely between isolated Codex accounts.
@@ -26,6 +28,7 @@ Usage:
   sesa login <context>
   sesa status <context>
   sesa run [<context>] [--allow-mismatch] [-- <codex arguments...>]
+  sesa code <context> [path]
 
 Commands:
   help              Show this help
@@ -37,6 +40,7 @@ Commands:
   login <context>   Log in through the official Codex CLI
   status <context>  Show the official Codex login status
   run [<context>]   Launch Codex in an isolated context
+  code <context>    Open VS Code in an isolated context
 
 Context names use 1-32 lowercase letters, digits, or hyphens and must start
 with a letter. Pass Codex arguments after --.`
@@ -50,7 +54,8 @@ const usage = `Usage:
   sesa unlink
   sesa login <context>
   sesa status <context>
-  sesa run [<context>] [--allow-mismatch] [-- <codex arguments...>]`
+  sesa run [<context>] [--allow-mismatch] [-- <codex arguments...>]
+  sesa code <context> [path]`
 
 type runner interface {
 	Check() error
@@ -59,11 +64,17 @@ type runner interface {
 	Run(home string, args []string) error
 }
 
+type codeRunner interface {
+	Check() error
+	Run(home, userDataDir, target string) error
+}
+
 type App struct {
 	userConfigDir  func() (string, error)
 	workingDir     func() (string, error)
 	repositoryRoot func(string) (string, error)
 	codex          runner
+	code           codeRunner
 	stdin          io.Reader
 	stdout         io.Writer
 	stderr         io.Writer
@@ -75,6 +86,7 @@ func New(stdin io.Reader, stdout, stderr io.Writer) App {
 		workingDir:     os.Getwd,
 		repositoryRoot: repository.GitRoot,
 		codex:          codex.Runner{Stdin: stdin, Stdout: stdout, Stderr: stderr},
+		code:           vscode.Runner{Stdout: stdout, Stderr: stderr},
 		stdin:          stdin,
 		stdout:         stdout,
 		stderr:         stderr,
@@ -107,9 +119,61 @@ func (a App) Run(args []string) int {
 		return a.list(store)
 	case actionLink, actionCurrent, actionUnlink:
 		return a.repositoryCommand(inv, store, mappingStore)
+	case actionCode:
+		return a.codeCommand(inv, store)
 	default:
 		return a.codexCommand(inv, store, mappingStore)
 	}
+}
+
+func (a App) codeCommand(inv invocation, store contexts.Store) int {
+	if err := a.prepareContext(store, inv.context, true); err != nil {
+		fmt.Fprintf(a.stderr, "sesa: %v\n", err)
+		return 1
+	}
+	if err := a.code.Check(); err != nil {
+		return a.codeError(err)
+	}
+	target, err := a.absoluteTarget(inv.target)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "sesa: resolve VS Code path: %v\n", err)
+		return 1
+	}
+	if err := store.EnsureVSCodeUserData(inv.context); err != nil {
+		fmt.Fprintf(a.stderr, "sesa: prepare VS Code isolation for %q: %v\n", inv.context, err)
+		return 1
+	}
+
+	fmt.Fprintf(a.stderr, "Sesa VS Code context: %s\n", strings.ToUpper(inv.context))
+	if err := a.code.Run(store.Home(inv.context), store.VSCodeUserData(inv.context), target); err != nil {
+		return a.codeError(err)
+	}
+	return 0
+}
+
+func (a App) absoluteTarget(target string) (string, error) {
+	if filepath.IsAbs(target) {
+		return filepath.Clean(target), nil
+	}
+	workingDir, err := a.workingDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(filepath.Join(workingDir, target)), nil
+}
+
+func (a App) codeError(err error) int {
+	if errors.Is(err, vscode.ErrNotFound) {
+		fmt.Fprintln(a.stderr, "sesa: code executable not found in PATH")
+		fmt.Fprintln(a.stderr, "Install the VS Code shell command, then try again.")
+		return 127
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) && exitError.ExitCode() >= 0 {
+		return exitError.ExitCode()
+	}
+	fmt.Fprintf(a.stderr, "sesa: launch VS Code: %v\n", err)
+	return 1
 }
 
 func (a App) codexCommand(inv invocation, store contexts.Store, mappingStore mappings.Store) int {
@@ -166,6 +230,12 @@ func (a App) doctor(store contexts.Store, mappingStore mappings.Store) int {
 		healthy = false
 	} else {
 		fmt.Fprintf(a.stdout, "✓ Codex CLI found (%s)\n", version)
+	}
+	if err := a.code.Check(); err != nil {
+		fmt.Fprintf(a.stdout, "✗ VS Code shell command: %v\n", err)
+		healthy = false
+	} else {
+		fmt.Fprintln(a.stdout, "✓ VS Code shell command found")
 	}
 
 	if err := store.CheckStorage(); err != nil {
