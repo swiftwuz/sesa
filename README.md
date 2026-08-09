@@ -2,6 +2,8 @@
 
 Switch safely between isolated Codex accounts.
 
+**Sesa** (pronounced **SEH-sah**) means **change** in Twi.
+
 Sesa is an open-source launcher for developers who use separate personal and
 work Codex accounts. Each named context gets its own `CODEX_HOME`, while the
 official Codex client continues to own login and credential management.

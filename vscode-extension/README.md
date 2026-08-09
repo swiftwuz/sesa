@@ -1,5 +1,7 @@
 # Sesa for Codex
 
+**Sesa** (pronounced **SEH-sah**) means **change** in Twi.
+
 Sesa for Codex shows which isolated Sesa context is active in a VS Code window
 and warns when that context conflicts with the repository's mapping.
 
