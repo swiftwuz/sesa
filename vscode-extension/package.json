@@ -6,6 +6,15 @@
   "publisher": "sesa",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/swiftwuz/sesa.git",
+    "directory": "vscode-extension"
+  },
+  "homepage": "https://github.com/swiftwuz/sesa#readme",
+  "bugs": {
+    "url": "https://github.com/swiftwuz/sesa/issues"
+  },
   "engines": {
     "vscode": "^1.125.0"
   },

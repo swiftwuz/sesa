@@ -18,7 +18,7 @@ isolated VS Code window.
 Build a local VSIX:
 
 ```sh
-npm install
+npm ci
 npm run package
 ```
 

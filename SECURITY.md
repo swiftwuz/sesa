@@ -16,7 +16,7 @@ Sesa is unofficial and is not affiliated with OpenAI.
   Codex CLI or extension.
 - Switching contexts launches a new isolated process. Sesa must not mutate the
   identity of an active Codex or VS Code process.
-- Human-readable CLI output and the future versioned JSON protocol remain
+- Human-readable CLI output and the versioned JSON protocol remain
   separate interfaces.
 
 Changes that weaken these invariants are out of scope, even when technically

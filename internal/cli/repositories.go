@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"sesa/internal/contexts"
-	"sesa/internal/mappings"
-	"sesa/internal/protocol"
-	"sesa/internal/repository"
+	"github.com/swiftwuz/sesa/internal/contexts"
+	"github.com/swiftwuz/sesa/internal/mappings"
+	"github.com/swiftwuz/sesa/internal/protocol"
+	"github.com/swiftwuz/sesa/internal/repository"
 )
 
 func (a App) repositoryCommand(inv invocation, contextStore contexts.Store, mappingStore mappings.Store) int {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"sesa/internal/contexts"
+	"github.com/swiftwuz/sesa/internal/contexts"
 )
 
 const (

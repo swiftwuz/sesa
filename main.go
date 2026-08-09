@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"sesa/internal/cli"
+	"github.com/swiftwuz/sesa/internal/cli"
 )
 
 func main() {

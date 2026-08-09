@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"sesa/internal/contexts"
+	"github.com/swiftwuz/sesa/internal/contexts"
 )
 
 type action uint8

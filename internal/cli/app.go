@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"sesa/internal/codex"
-	"sesa/internal/contexts"
-	"sesa/internal/mappings"
-	"sesa/internal/protocol"
-	"sesa/internal/repository"
-	"sesa/internal/vscode"
+	"github.com/swiftwuz/sesa/internal/codex"
+	"github.com/swiftwuz/sesa/internal/contexts"
+	"github.com/swiftwuz/sesa/internal/mappings"
+	"github.com/swiftwuz/sesa/internal/protocol"
+	"github.com/swiftwuz/sesa/internal/repository"
+	"github.com/swiftwuz/sesa/internal/vscode"
 )
 
 const helpText = `Sesa switches safely between isolated Codex accounts.

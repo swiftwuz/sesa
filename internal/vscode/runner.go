@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"sesa/internal/codex"
+	"github.com/swiftwuz/sesa/internal/codex"
 )
 
 var ErrNotFound = errors.New("code executable not found in PATH")
