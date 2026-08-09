@@ -124,6 +124,86 @@ func TestCodeRequiresExistingContext(t *testing.T) {
 	}
 }
 
+func TestCodeUsesRepositoryMapping(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	if err := store.Ensure("work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+		t.Fatal(err)
+	}
+	code := &fakeCodeRunner{}
+	app, _, _ := testApp(configDir, &fakeRunner{})
+	app.code = code
+	app.workingDir = func() (string, error) { return "/repos/project", nil }
+	app.repositoryRoot = func(directory string) (string, error) {
+		if directory != "/repos/project" {
+			t.Fatalf("repositoryRoot() directory = %q", directory)
+		}
+		return "/repos/project", nil
+	}
+
+	if got := app.Run([]string{"code"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	if code.home != store.Home("work") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("work"))
+	}
+}
+
+func TestCodeMismatchRequiresConfirmation(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+		t.Fatal(err)
+	}
+	code := &fakeCodeRunner{}
+	app, _, stderr := testApp(configDir, &fakeRunner{})
+	app.code = code
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+	app.stdin = strings.NewReader("no\n")
+
+	if got := app.Run([]string{"code", "personal"}); got != 1 {
+		t.Fatalf("Run() exit code = %d, want 1", got)
+	}
+	if code.home != "" {
+		t.Fatal("VS Code ran after mismatch was declined")
+	}
+	if !strings.Contains(stderr.String(), "mapped to WORK, but PERSONAL was requested") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestCodeMismatchCanBeExplicitlyAllowed(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+		t.Fatal(err)
+	}
+	code := &fakeCodeRunner{}
+	app, _, _ := testApp(configDir, &fakeRunner{})
+	app.code = code
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"code", "personal", "--allow-mismatch"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	if code.home != store.Home("personal") {
+		t.Fatalf("CODEX_HOME = %q, want %q", code.home, store.Home("personal"))
+	}
+}
+
 func TestCodeReportsMissingExecutable(t *testing.T) {
 	configDir := t.TempDir()
 	store := contexts.New(configDir)

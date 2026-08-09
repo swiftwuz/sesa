@@ -26,8 +26,10 @@ func TestParseArgs(t *testing.T) {
 		{name: "mapped run with Codex arguments", args: []string{"run", "--", "-C", "/tmp/project"}, want: invocation{action: actionRun, codexArgs: []string{"-C", "/tmp/project"}}},
 		{name: "run with mismatch override", args: []string{"run", "personal", "--allow-mismatch"}, want: invocation{action: actionRun, context: "personal", allowMismatch: true}},
 		{name: "run with Codex arguments", args: []string{"run", "work", "--", "-C", "/tmp/project"}, want: invocation{action: actionRun, context: "work", codexArgs: []string{"-C", "/tmp/project"}}},
+		{name: "mapped code", args: []string{"code"}, want: invocation{action: actionCode, target: "."}},
 		{name: "code default path", args: []string{"code", "personal"}, want: invocation{action: actionCode, context: "personal", target: "."}},
 		{name: "code path", args: []string{"code", "work", "/tmp/project"}, want: invocation{action: actionCode, context: "work", target: "/tmp/project"}},
+		{name: "code mismatch override", args: []string{"code", "personal", "--allow-mismatch", "/tmp/project"}, want: invocation{action: actionCode, context: "personal", target: "/tmp/project", allowMismatch: true}},
 	}
 
 	for _, tt := range tests {
@@ -55,7 +57,6 @@ func TestParseArgsRejectsUnsafeOrAmbiguousInput(t *testing.T) {
 		{"run", "Work"},
 		{"run", "work", "-C", "/tmp/project"},
 		{"run", "--allow-mismatch"},
-		{"code"},
 		{"code", "Work"},
 		{"code", "work", ".", "extra"},
 		{"login", "work", "extra"},

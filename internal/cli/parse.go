@@ -56,20 +56,27 @@ func parseArgs(args []string) (invocation, error) {
 }
 
 func parseCode(args []string) (invocation, error) {
-	if len(args) < 2 {
-		return invocation{}, errors.New("expected a context")
-	}
-	if len(args) > 3 {
-		return invocation{}, errors.New("code accepts one optional path")
+	inv := invocation{action: actionCode, target: "."}
+	if len(args) == 1 {
+		return inv, nil
 	}
 	if err := contexts.ValidateName(args[1]); err != nil {
 		return invocation{}, err
 	}
-	target := "."
-	if len(args) == 3 {
-		target = args[2]
+	inv.context = args[1]
+	index := 2
+	if index < len(args) && args[index] == "--allow-mismatch" {
+		inv.allowMismatch = true
+		index++
 	}
-	return invocation{action: actionCode, context: args[1], target: target}, nil
+	if index < len(args) {
+		inv.target = args[index]
+		index++
+	}
+	if index != len(args) {
+		return invocation{}, errors.New("code accepts one optional path")
+	}
+	return inv, nil
 }
 
 func parseStandalone(args []string, command string, commandAction action) (invocation, error) {

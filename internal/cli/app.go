@@ -28,7 +28,7 @@ Usage:
   sesa login <context>
   sesa status <context>
   sesa run [<context>] [--allow-mismatch] [-- <codex arguments...>]
-  sesa code <context> [path]
+  sesa code [<context>] [--allow-mismatch] [path]
 
 Commands:
   help              Show this help
@@ -40,7 +40,7 @@ Commands:
   login <context>   Log in through the official Codex CLI
   status <context>  Show the official Codex login status
   run [<context>]   Launch Codex in an isolated context
-  code <context>    Open VS Code in an isolated context
+  code [<context>]  Open VS Code in an isolated context
 
 Context names use 1-32 lowercase letters, digits, or hyphens and must start
 with a letter. Pass Codex arguments after --.`
@@ -55,7 +55,7 @@ const usage = `Usage:
   sesa login <context>
   sesa status <context>
   sesa run [<context>] [--allow-mismatch] [-- <codex arguments...>]
-  sesa code <context> [path]`
+  sesa code [<context>] [--allow-mismatch] [path]`
 
 type runner interface {
 	Check() error
@@ -120,24 +120,30 @@ func (a App) Run(args []string) int {
 	case actionLink, actionCurrent, actionUnlink:
 		return a.repositoryCommand(inv, store, mappingStore)
 	case actionCode:
-		return a.codeCommand(inv, store)
+		return a.codeCommand(inv, store, mappingStore)
 	default:
 		return a.codexCommand(inv, store, mappingStore)
 	}
 }
 
-func (a App) codeCommand(inv invocation, store contexts.Store) int {
+func (a App) codeCommand(inv invocation, store contexts.Store, mappingStore mappings.Store) int {
+	target, err := a.absoluteTarget(inv.target)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "sesa: resolve VS Code path: %v\n", err)
+		return 1
+	}
+	selected, err := a.selectCodeContext(inv, target, mappingStore)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "sesa: %v\n", err)
+		return 1
+	}
+	inv.context = selected
 	if err := a.prepareContext(store, inv.context, true); err != nil {
 		fmt.Fprintf(a.stderr, "sesa: %v\n", err)
 		return 1
 	}
 	if err := a.code.Check(); err != nil {
 		return a.codeError(err)
-	}
-	target, err := a.absoluteTarget(inv.target)
-	if err != nil {
-		fmt.Fprintf(a.stderr, "sesa: resolve VS Code path: %v\n", err)
-		return 1
 	}
 	if err := store.EnsureVSCodeUserData(inv.context); err != nil {
 		fmt.Fprintf(a.stderr, "sesa: prepare VS Code isolation for %q: %v\n", inv.context, err)
@@ -149,6 +155,12 @@ func (a App) codeCommand(inv invocation, store contexts.Store) int {
 		return a.codeError(err)
 	}
 	return 0
+}
+
+func (a App) selectCodeContext(inv invocation, target string, mappingStore mappings.Store) (string, error) {
+	root, rootErr := a.repositoryRoot(target)
+	selected, _, err := a.selectRepositoryContext(inv.context, inv.allowMismatch, root, rootErr, mappingStore)
+	return selected, err
 }
 
 func (a App) absoluteTarget(target string) (string, error) {

@@ -79,7 +79,11 @@ func (a App) unlinkRepository(root string, mappingStore mappings.Store) int {
 
 func (a App) selectRunContext(inv invocation, mappingStore mappings.Store) (string, bool, error) {
 	root, rootErr := a.currentRepository()
-	if inv.context == "" {
+	return a.selectRepositoryContext(inv.context, inv.allowMismatch, root, rootErr, mappingStore)
+}
+
+func (a App) selectRepositoryContext(requested string, allowMismatch bool, root string, rootErr error, mappingStore mappings.Store) (string, bool, error) {
+	if requested == "" {
 		if rootErr != nil {
 			return "", false, rootErr
 		}
@@ -95,7 +99,7 @@ func (a App) selectRunContext(inv invocation, mappingStore mappings.Store) (stri
 
 	if rootErr != nil {
 		if errors.Is(rootErr, repository.ErrNotRepository) {
-			return inv.context, false, nil
+			return requested, false, nil
 		}
 		return "", false, rootErr
 	}
@@ -103,13 +107,13 @@ func (a App) selectRunContext(inv invocation, mappingStore mappings.Store) (stri
 	if err != nil {
 		return "", false, fmt.Errorf("load repository mapping: %w", err)
 	}
-	if !ok || mapped == inv.context || inv.allowMismatch {
-		return inv.context, false, nil
+	if !ok || mapped == requested || allowMismatch {
+		return requested, false, nil
 	}
-	if !a.confirmMismatch(mapped, inv.context) {
+	if !a.confirmMismatch(mapped, requested) {
 		return "", false, errors.New("context mismatch cancelled")
 	}
-	return inv.context, false, nil
+	return requested, false, nil
 }
 
 func (a App) currentRepository() (string, error) {
