@@ -35,9 +35,9 @@ Commands:
   help              Show this help
   doctor            Diagnose the Codex installation and isolated contexts
   list [--json]     List available contexts
-  link <context>    Map the current Git repository to a context
-  current [--json]  Show the current repository's mapped context
-  unlink            Remove the current repository's mapping
+  link <context>    Allow a context for the current Git repository
+  current [--json]  Show the current repository's allowed contexts
+  unlink            Remove all mappings for the current repository
   login <context>   Log in through the official Codex CLI
   status <context>  Show the official Codex login status
   run [<context>]   Launch Codex in an isolated context

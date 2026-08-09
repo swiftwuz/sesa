@@ -56,16 +56,16 @@ export function presentStatus(input: StatusInput): StatusPresentation {
     };
   }
 
-  const expected = input.current.context.toUpperCase();
-  if (input.current.context !== input.activeContext) {
+  const allowed = input.current.contexts.map((context) => context.toUpperCase());
+  if (!input.current.contexts.includes(input.activeContext)) {
     return {
-      text: `$(error) SESA: ${active} · EXPECTS ${expected}`,
-      tooltip: `Repository: ${input.current.repository}\nActive context: ${active}\nExpected context: ${expected}.`,
+      text: `$(error) SESA: ${active} · NOT ALLOWED`,
+      tooltip: `Repository: ${input.current.repository}\nActive context: ${active}\nAllowed contexts: ${allowed.join(", ")}.`,
       emphasis: "error",
     };
   }
   return {
     text: `$(shield) SESA: ${active}`,
-    tooltip: `Repository: ${input.current.repository}\nActive and expected context: ${active}.`,
+    tooltip: `Repository: ${input.current.repository}\nActive context: ${active}\nAllowed contexts: ${allowed.join(", ")}.`,
   };
 }

@@ -1,19 +1,21 @@
 package protocol
 
-const Version = 1
+const Version = 2
 
 type CurrentRepository struct {
-	ProtocolVersion int     `json:"protocolVersion"`
-	Repository      string  `json:"repository"`
-	Mapped          bool    `json:"mapped"`
-	Context         *string `json:"context"`
+	ProtocolVersion int      `json:"protocolVersion"`
+	Repository      string   `json:"repository"`
+	Mapped          bool     `json:"mapped"`
+	Contexts        []string `json:"contexts"`
 }
 
-func NewCurrentRepository(repository string, context *string) CurrentRepository {
+func NewCurrentRepository(repository string, contexts []string) CurrentRepository {
+	allowed := make([]string, len(contexts))
+	copy(allowed, contexts)
 	return CurrentRepository{
 		ProtocolVersion: Version,
 		Repository:      repository,
-		Mapped:          context != nil,
-		Context:         context,
+		Mapped:          len(allowed) > 0,
+		Contexts:        allowed,
 	}
 }

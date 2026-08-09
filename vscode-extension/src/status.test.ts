@@ -6,7 +6,7 @@ import { presentStatus } from "./status.js";
 test("shows a matching managed context", () => {
   const status = presentStatus({
     activeContext: "work",
-    current: { protocolVersion: 1, repository: "/repos/project", mapped: true, context: "work" },
+    current: { protocolVersion: 2, repository: "/repos/project", mapped: true, contexts: ["personal", "work"] },
     workspaceCount: 1
   });
 
@@ -17,18 +17,18 @@ test("shows a matching managed context", () => {
 test("makes a context mismatch unmistakable", () => {
   const status = presentStatus({
     activeContext: "personal",
-    current: { protocolVersion: 1, repository: "/repos/project", mapped: true, context: "work" },
+    current: { protocolVersion: 2, repository: "/repos/project", mapped: true, contexts: ["work"] },
     workspaceCount: 1
   });
 
-  assert.equal(status.text, "$(error) SESA: PERSONAL · EXPECTS WORK");
+  assert.equal(status.text, "$(error) SESA: PERSONAL · NOT ALLOWED");
   assert.equal(status.emphasis, "error");
 });
 
 test("warns for unmapped and unmanaged windows", () => {
   const unmapped = presentStatus({
     activeContext: "personal",
-    current: { protocolVersion: 1, repository: "/repos/project", mapped: false, context: null },
+    current: { protocolVersion: 2, repository: "/repos/project", mapped: false, contexts: [] },
     workspaceCount: 1
   });
   const unmanaged = presentStatus({ workspaceCount: 1 });

@@ -7,15 +7,24 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"sesa/internal/contexts"
 )
 
-const currentVersion = 1
+const (
+	legacyVersion  = 1
+	currentVersion = 2
+)
 
 type config struct {
-	Version      int               `json:"version"`
-	Repositories map[string]string `json:"repositories"`
+	Version      int                 `json:"version"`
+	Repositories map[string][]string `json:"repositories"`
+}
+
+type rawConfig struct {
+	Version      int             `json:"version"`
+	Repositories json.RawMessage `json:"repositories"`
 }
 
 type Store struct {
@@ -26,16 +35,16 @@ func New(userConfigDir string) Store {
 	return Store{path: filepath.Join(userConfigDir, "sesa", "config.json")}
 }
 
-func (s Store) Get(repository string) (string, bool, error) {
+func (s Store) Get(repository string) ([]string, bool, error) {
 	cfg, err := s.load()
 	if err != nil {
-		return "", false, err
+		return nil, false, err
 	}
-	context, ok := cfg.Repositories[repository]
-	return context, ok, nil
+	allowed, ok := cfg.Repositories[repository]
+	return append([]string(nil), allowed...), ok, nil
 }
 
-func (s Store) Set(repository, context string) error {
+func (s Store) Add(repository, context string) error {
 	if err := validateEntry(repository, context); err != nil {
 		return err
 	}
@@ -43,18 +52,18 @@ func (s Store) Set(repository, context string) error {
 	if err != nil {
 		return err
 	}
-	cfg.Repositories[repository] = context
+	cfg.Repositories[repository] = addContext(cfg.Repositories[repository], context)
 	return s.save(cfg)
 }
 
-func (s Store) Entries() (map[string]string, error) {
+func (s Store) Entries() (map[string][]string, error) {
 	cfg, err := s.load()
 	if err != nil {
 		return nil, err
 	}
-	entries := make(map[string]string, len(cfg.Repositories))
-	for repository, context := range cfg.Repositories {
-		entries[repository] = context
+	entries := make(map[string][]string, len(cfg.Repositories))
+	for repository, allowed := range cfg.Repositories {
+		entries[repository] = append([]string(nil), allowed...)
 	}
 	return entries, nil
 }
@@ -83,25 +92,74 @@ func (s Store) load() (config, error) {
 
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
-	var cfg config
-	if err := decoder.Decode(&cfg); err != nil {
+	var raw rawConfig
+	if err := decoder.Decode(&raw); err != nil {
 		return config{}, fmt.Errorf("decode %s: %w", s.path, err)
 	}
 	if err := ensureJSONEnd(decoder); err != nil {
 		return config{}, fmt.Errorf("decode %s: %w", s.path, err)
 	}
-	if cfg.Version != currentVersion {
-		return config{}, fmt.Errorf("unsupported mapping configuration version %d", cfg.Version)
-	}
-	if cfg.Repositories == nil {
-		cfg.Repositories = make(map[string]string)
-	}
-	for repository, context := range cfg.Repositories {
-		if err := validateEntry(repository, context); err != nil {
-			return config{}, fmt.Errorf("invalid repository mapping: %w", err)
-		}
+	cfg, err := decodeConfig(raw)
+	if err != nil {
+		return config{}, fmt.Errorf("decode %s: %w", s.path, err)
 	}
 	return cfg, nil
+}
+
+func decodeConfig(raw rawConfig) (config, error) {
+	switch raw.Version {
+	case legacyVersion:
+		return decodeLegacyConfig(raw.Repositories)
+	case currentVersion:
+		return decodeCurrentConfig(raw.Repositories)
+	default:
+		return config{}, fmt.Errorf("unsupported mapping configuration version %d", raw.Version)
+	}
+}
+
+func decodeLegacyConfig(data json.RawMessage) (config, error) {
+	legacy := make(map[string]string)
+	if err := decodeRepositories(data, &legacy); err != nil {
+		return config{}, err
+	}
+	repositories := make(map[string][]string, len(legacy))
+	for repository, context := range legacy {
+		repositories[repository] = []string{context}
+	}
+	return validatedConfig(repositories)
+}
+
+func decodeCurrentConfig(data json.RawMessage) (config, error) {
+	repositories := make(map[string][]string)
+	if err := decodeRepositories(data, &repositories); err != nil {
+		return config{}, err
+	}
+	return validatedConfig(repositories)
+}
+
+func decodeRepositories(data json.RawMessage, target any) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	return json.Unmarshal(data, target)
+}
+
+func validatedConfig(repositories map[string][]string) (config, error) {
+	for repository, allowed := range repositories {
+		if err := validateRepository(repository); err != nil {
+			return config{}, fmt.Errorf("invalid repository mapping: %w", err)
+		}
+		if len(allowed) == 0 {
+			return config{}, fmt.Errorf("invalid repository mapping: repository %q has no contexts", repository)
+		}
+		for _, context := range allowed {
+			if err := contexts.ValidateName(context); err != nil {
+				return config{}, fmt.Errorf("invalid repository mapping: %w", err)
+			}
+		}
+		repositories[repository] = uniqueSorted(allowed)
+	}
+	return config{Version: currentVersion, Repositories: repositories}, nil
 }
 
 func (s Store) save(cfg config) (err error) {
@@ -146,7 +204,7 @@ func (s Store) save(cfg config) (err error) {
 }
 
 func newConfig() config {
-	return config{Version: currentVersion, Repositories: make(map[string]string)}
+	return config{Version: currentVersion, Repositories: make(map[string][]string)}
 }
 
 func ensureJSONEnd(decoder *json.Decoder) error {
@@ -160,11 +218,30 @@ func ensureJSONEnd(decoder *json.Decoder) error {
 }
 
 func validateEntry(repository, context string) error {
+	if err := validateRepository(repository); err != nil {
+		return err
+	}
+	return contexts.ValidateName(context)
+}
+
+func validateRepository(repository string) error {
 	if !filepath.IsAbs(repository) || filepath.Clean(repository) != repository {
 		return fmt.Errorf("repository path %q must be absolute and clean", repository)
 	}
-	if err := contexts.ValidateName(context); err != nil {
-		return err
-	}
 	return nil
+}
+
+func addContext(allowed []string, context string) []string {
+	return uniqueSorted(append(append([]string(nil), allowed...), context))
+}
+
+func uniqueSorted(contexts []string) []string {
+	sort.Strings(contexts)
+	result := contexts[:0]
+	for _, context := range contexts {
+		if len(result) == 0 || result[len(result)-1] != context {
+			result = append(result, context)
+		}
+	}
+	return result
 }

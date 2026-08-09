@@ -41,7 +41,9 @@ export function activate(extensionContext: vscode.ExtensionContext): void {
   void refresh();
 }
 
-async function resolvePresentation(client: SesaClient): Promise<StatusPresentation> {
+async function resolvePresentation(
+  client: SesaClient,
+): Promise<StatusPresentation> {
   const activeContext = parseActiveContext(process.env.SESA_CONTEXT);
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (activeContext === undefined) {
@@ -66,7 +68,10 @@ async function resolvePresentation(client: SesaClient): Promise<StatusPresentati
   }
 }
 
-async function switchContext(client: SesaClient, refresh: () => Promise<void>): Promise<void> {
+async function switchContext(
+  client: SesaClient,
+  refresh: () => Promise<void>,
+): Promise<void> {
   const repository = singleRepository();
   if (repository === undefined) {
     return;
@@ -75,31 +80,32 @@ async function switchContext(client: SesaClient, refresh: () => Promise<void>): 
   try {
     const contexts = await client.contexts(repository);
     if (contexts.length === 0) {
-      await vscode.window.showErrorMessage("No Sesa contexts found. Run sesa login <context> first.");
+      await vscode.window.showErrorMessage(
+        "No Sesa contexts found. Run sesa login <context> first.",
+      );
       return;
     }
-    const selected = await pickContext(contexts, process.env.SESA_CONTEXT);
+    const current = await client.current(repository);
+    const selected = await pickContext(contexts, process.env.SESA_CONTEXT, current);
     if (selected === undefined) {
       return;
     }
 
-    const current = await client.current(repository);
     const active = parseActiveContext(process.env.SESA_CONTEXT);
     const plan = planSwitch(active, selected, current);
-    if (plan.confirmRemap) {
-      if (!current.mapped || !(await confirmRemap(current.context, selected))) {
-        return;
-      }
-    }
     if (plan.linkRepository) {
       await client.link(selected, repository);
     }
     if (plan.launchWindow) {
       await client.openCode(selected, repository);
-      await vscode.window.showInformationMessage(`Opened a new isolated ${selected.toUpperCase()} window. Close this window when ready.`);
+      await vscode.window.showInformationMessage(
+        `Opened a new isolated ${selected.toUpperCase()} window. Close this window when ready.`,
+      );
     } else {
       await refresh();
-      await vscode.window.showInformationMessage(`This repository now uses ${selected.toUpperCase()}.`);
+      await vscode.window.showInformationMessage(
+        `This repository now allows ${selected.toUpperCase()}.`,
+      );
     }
   } catch (error) {
     await vscode.window.showErrorMessage(describeError(error));
@@ -109,21 +115,27 @@ async function switchContext(client: SesaClient, refresh: () => Promise<void>): 
 function singleRepository(): string | undefined {
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length !== 1) {
-    void vscode.window.showErrorMessage("Open exactly one repository before switching Sesa context.");
+    void vscode.window.showErrorMessage(
+      "Open exactly one repository before switching Sesa context.",
+    );
     return undefined;
   }
   return folders[0]!.uri.fsPath;
 }
 
-async function pickContext(contexts: string[], activeContext: string | undefined): Promise<string | undefined> {
+async function pickContext(
+  contexts: string[],
+  activeContext: string | undefined,
+  current: Awaited<ReturnType<SesaClient["current"]>>,
+): Promise<string | undefined> {
   interface ContextItem extends vscode.QuickPickItem {
     context: string;
   }
-  const items: ContextItem[] = contexts.map((context) =>
-    context === activeContext
-      ? { label: context.toUpperCase(), description: "Current window", context }
-      : { label: context.toUpperCase(), context },
-  );
+  const items: ContextItem[] = contexts.map((context) => ({
+    label: context.toUpperCase(),
+    description: describeContextOption(context, activeContext, current.contexts),
+    context,
+  }));
   const selected = await vscode.window.showQuickPick(items, {
     title: "Open repository with Sesa context",
     placeHolder: "Choose an isolated Codex context",
@@ -131,13 +143,19 @@ async function pickContext(contexts: string[], activeContext: string | undefined
   return selected?.context;
 }
 
-async function confirmRemap(current: string, selected: string): Promise<boolean> {
-  const choice = await vscode.window.showWarningMessage(
-    `This repository is mapped to ${current.toUpperCase()}. Remap it to ${selected.toUpperCase()}?`,
-    { modal: true },
-    "Remap and continue",
+function describeContextOption(
+  context: string,
+  activeContext: string | undefined,
+  allowed: string[],
+): string {
+  const descriptions: string[] = [];
+  if (context === activeContext) {
+    descriptions.push("Current window");
+  }
+  descriptions.push(
+    allowed.includes(context) ? "Allowed for repository" : "Add to repository",
   );
-  return choice === "Remap and continue";
+  return descriptions.join(" · ");
 }
 
 function render(
@@ -174,11 +192,20 @@ function describeError(error: unknown): string {
 }
 
 function isErrorWithCode(error: unknown): error is Error & { code: string } {
-  return error instanceof Error && "code" in error && typeof error.code === "string";
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string"
+  );
 }
 
 function hasStderr(error: unknown): error is { stderr: string } {
-  return typeof error === "object" && error !== null && "stderr" in error && typeof error.stderr === "string";
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "stderr" in error &&
+    typeof error.stderr === "string"
+  );
 }
 
 export function deactivate(): void {}

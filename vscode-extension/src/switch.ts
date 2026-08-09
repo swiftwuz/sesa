@@ -3,7 +3,6 @@ import type { CurrentRepository } from "./protocol.js";
 export interface SwitchPlan {
   linkRepository: boolean;
   launchWindow: boolean;
-  confirmRemap: boolean;
 }
 
 export function planSwitch(
@@ -11,12 +10,9 @@ export function planSwitch(
   selectedContext: string,
   current: CurrentRepository,
 ): SwitchPlan {
-  const linkRepository =
-    !current.mapped || current.context !== selectedContext;
+  const linkRepository = !current.contexts.includes(selectedContext);
   return {
     linkRepository,
     launchWindow: activeContext !== selectedContext,
-    confirmRemap:
-      current.mapped && current.context !== selectedContext,
   };
 }

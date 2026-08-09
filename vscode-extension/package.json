@@ -2,7 +2,7 @@
   "name": "sesa-for-codex",
   "displayName": "Sesa for Codex",
   "description": "Shows the active Sesa Codex context and warns about repository mismatches.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "sesa",
   "license": "MIT",
   "private": true,

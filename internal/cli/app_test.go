@@ -131,7 +131,7 @@ func TestCodeUsesRepositoryMapping(t *testing.T) {
 	if err := store.Ensure("work"); err != nil {
 		t.Fatal(err)
 	}
-	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+	if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 		t.Fatal(err)
 	}
 	code := &fakeCodeRunner{}
@@ -161,7 +161,7 @@ func TestCodeMismatchRequiresConfirmation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+	if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 		t.Fatal(err)
 	}
 	code := &fakeCodeRunner{}
@@ -176,7 +176,7 @@ func TestCodeMismatchRequiresConfirmation(t *testing.T) {
 	if code.launch.CodexHome != "" {
 		t.Fatal("VS Code ran after mismatch was declined")
 	}
-	if !strings.Contains(stderr.String(), "mapped to WORK, but PERSONAL was requested") {
+	if !strings.Contains(stderr.String(), "allows WORK, but PERSONAL was requested") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -189,7 +189,7 @@ func TestCodeMismatchCanBeExplicitlyAllowed(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+	if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 		t.Fatal(err)
 	}
 	code := &fakeCodeRunner{}
@@ -302,7 +302,7 @@ func TestListJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
 		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
 	}
-	if response.ProtocolVersion != 1 || !reflect.DeepEqual(response.Contexts, []string{"personal", "work"}) {
+	if response.ProtocolVersion != 2 || !reflect.DeepEqual(response.Contexts, []string{"personal", "work"}) {
 		t.Fatalf("response = %#v", response)
 	}
 	if stderr.Len() != 0 {
@@ -439,9 +439,63 @@ func TestRepositoryMappingLifecycleAndMappedRun(t *testing.T) {
 	}
 }
 
+func TestRepositoryCanAllowMultipleContexts(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &fakeRunner{}
+	app, stdout, _ := testApp(configDir, runner)
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	for _, context := range []string{"work", "personal"} {
+		if got := app.Run([]string{"link", context}); got != 0 {
+			t.Fatalf("link %s exit code = %d", context, got)
+		}
+	}
+	stdout.Reset()
+	if got := app.Run([]string{"current"}); got != 0 {
+		t.Fatalf("current exit code = %d", got)
+	}
+	if stdout.String() != "PERSONAL, WORK\n" {
+		t.Fatalf("current output = %q", stdout.String())
+	}
+	if got := app.Run([]string{"run", "personal"}); got != 0 {
+		t.Fatalf("explicit allowed run exit code = %d", got)
+	}
+	if runner.home != store.Home("personal") {
+		t.Fatalf("runner home = %q", runner.home)
+	}
+}
+
+func TestMappedRunRequiresExplicitContextWhenSeveralAreAllowed(t *testing.T) {
+	configDir := t.TempDir()
+	store := contexts.New(configDir)
+	for _, name := range []string{"personal", "work"} {
+		if err := store.Ensure(name); err != nil {
+			t.Fatal(err)
+		}
+		if err := mappings.New(configDir).Add("/repos/project", name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app, _, stderr := testApp(configDir, &fakeRunner{})
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"run"}); got != 1 {
+		t.Fatalf("Run() exit code = %d, want 1", got)
+	}
+	if !strings.Contains(stderr.String(), "allows multiple contexts") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestCurrentJSONReportsMappedRepository(t *testing.T) {
 	configDir := t.TempDir()
-	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+	if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 		t.Fatal(err)
 	}
 	app, stdout, stderr := testApp(configDir, &fakeRunner{})
@@ -454,16 +508,16 @@ func TestCurrentJSONReportsMappedRepository(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
 		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
 	}
-	if response.ProtocolVersion != 1 || response.Repository != "/repos/project" || !response.Mapped {
+	if response.ProtocolVersion != 2 || response.Repository != "/repos/project" || !response.Mapped {
 		t.Fatalf("response = %#v", response)
 	}
-	if response.Context == nil || *response.Context != "work" {
-		t.Fatalf("context = %v, want work", response.Context)
+	if !reflect.DeepEqual(response.Contexts, []string{"work"}) {
+		t.Fatalf("contexts = %v, want work", response.Contexts)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "\n  \"protocolVersion\": 1,") {
+	if !strings.Contains(stdout.String(), "\n  \"protocolVersion\": 2,") {
 		t.Fatalf("stdout is not indented JSON: %q", stdout.String())
 	}
 }
@@ -479,7 +533,7 @@ func TestCurrentJSONReportsUnmappedRepositoryAsState(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
 		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
 	}
-	if response.ProtocolVersion != 1 || response.Repository != "/repos/project" || response.Mapped || response.Context != nil {
+	if response.ProtocolVersion != 2 || response.Repository != "/repos/project" || response.Mapped || len(response.Contexts) != 0 {
 		t.Fatalf("response = %#v", response)
 	}
 	if stderr.Len() != 0 {
@@ -517,7 +571,7 @@ func TestRunMismatchRequiresConfirmation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+	if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 		t.Fatal(err)
 	}
 	runner := &fakeRunner{}
@@ -531,7 +585,7 @@ func TestRunMismatchRequiresConfirmation(t *testing.T) {
 	if runner.home != "" {
 		t.Fatal("Codex ran after mismatch was declined")
 	}
-	if !strings.Contains(stderr.String(), "mapped to WORK, but PERSONAL was requested") {
+	if !strings.Contains(stderr.String(), "allows WORK, but PERSONAL was requested") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
@@ -553,7 +607,7 @@ func TestRunMismatchCanBeConfirmedOrExplicitlyAllowed(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+			if err := mappings.New(configDir).Add("/repos/project", "work"); err != nil {
 				t.Fatal(err)
 			}
 			runner := &fakeRunner{}
