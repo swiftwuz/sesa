@@ -28,6 +28,7 @@ type invocation struct {
 	codexArgs     []string
 	target        string
 	allowMismatch bool
+	jsonOutput    bool
 }
 
 func parseArgs(args []string) (invocation, error) {
@@ -43,7 +44,7 @@ func parseArgs(args []string) (invocation, error) {
 	case "list":
 		return parseStandalone(args, "list", actionList)
 	case "current":
-		return parseStandalone(args, "current", actionCurrent)
+		return parseCurrent(args)
 	case "unlink":
 		return parseStandalone(args, "unlink", actionUnlink)
 	case "run":
@@ -53,6 +54,16 @@ func parseArgs(args []string) (invocation, error) {
 	default:
 		return parseContextCommand(args)
 	}
+}
+
+func parseCurrent(args []string) (invocation, error) {
+	if len(args) == 1 {
+		return invocation{action: actionCurrent}, nil
+	}
+	if len(args) == 2 && args[1] == "--json" {
+		return invocation{action: actionCurrent, jsonOutput: true}, nil
+	}
+	return invocation{}, errors.New("current only accepts --json")
 }
 
 func parseCode(args []string) (invocation, error) {

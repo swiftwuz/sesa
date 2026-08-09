@@ -2,12 +2,14 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"sesa/internal/contexts"
 	"sesa/internal/mappings"
+	"sesa/internal/protocol"
 	"sesa/internal/repository"
 )
 
@@ -22,7 +24,7 @@ func (a App) repositoryCommand(inv invocation, contextStore contexts.Store, mapp
 	case actionLink:
 		return a.linkRepository(root, inv.context, contextStore, mappingStore)
 	case actionCurrent:
-		return a.showCurrentRepository(root, mappingStore)
+		return a.showCurrentRepository(root, mappingStore, inv.jsonOutput)
 	case actionUnlink:
 		return a.unlinkRepository(root, mappingStore)
 	default:
@@ -49,17 +51,34 @@ func (a App) linkRepository(root, context string, contextStore contexts.Store, m
 	return 0
 }
 
-func (a App) showCurrentRepository(root string, mappingStore mappings.Store) int {
+func (a App) showCurrentRepository(root string, mappingStore mappings.Store, jsonOutput bool) int {
 	context, ok, err := mappingStore.Get(root)
 	if err != nil {
 		fmt.Fprintf(a.stderr, "sesa: load repository mapping: %v\n", err)
 		return 1
+	}
+	if jsonOutput {
+		return a.writeCurrentJSON(root, context, ok)
 	}
 	if !ok {
 		fmt.Fprintln(a.stderr, "sesa: current repository is not mapped")
 		return 1
 	}
 	fmt.Fprintln(a.stdout, strings.ToUpper(context))
+	return 0
+}
+
+func (a App) writeCurrentJSON(root, context string, mapped bool) int {
+	var selected *string
+	if mapped {
+		selected = &context
+	}
+	encoder := json.NewEncoder(a.stdout)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(protocol.NewCurrentRepository(root, selected)); err != nil {
+		fmt.Fprintf(a.stderr, "sesa: encode JSON output: %v\n", err)
+		return 1
+	}
 	return 0
 }
 

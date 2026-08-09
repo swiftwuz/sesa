@@ -23,7 +23,7 @@ Usage:
   sesa doctor
   sesa list
   sesa link <context>
-  sesa current
+  sesa current [--json]
   sesa unlink
   sesa login <context>
   sesa status <context>
@@ -35,7 +35,7 @@ Commands:
   doctor            Diagnose the Codex installation and isolated contexts
   list              List available contexts
   link <context>    Map the current Git repository to a context
-  current           Show the current repository's mapped context
+  current [--json]  Show the current repository's mapped context
   unlink            Remove the current repository's mapping
   login <context>   Log in through the official Codex CLI
   status <context>  Show the official Codex login status
@@ -50,7 +50,7 @@ const usage = `Usage:
   sesa doctor
   sesa list
   sesa link <context>
-  sesa current
+  sesa current [--json]
   sesa unlink
   sesa login <context>
   sesa status <context>

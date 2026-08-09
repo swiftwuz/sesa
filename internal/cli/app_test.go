@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"sesa/internal/codex"
 	"sesa/internal/contexts"
 	"sesa/internal/mappings"
+	"sesa/internal/protocol"
 	"sesa/internal/repository"
 	"sesa/internal/vscode"
 )
@@ -401,6 +403,54 @@ func TestRepositoryMappingLifecycleAndMappedRun(t *testing.T) {
 	}
 	if _, ok, err := mappings.New(configDir).Get("/repos/project"); err != nil || ok {
 		t.Fatalf("mapping remains after unlink: ok=%t err=%v", ok, err)
+	}
+}
+
+func TestCurrentJSONReportsMappedRepository(t *testing.T) {
+	configDir := t.TempDir()
+	if err := mappings.New(configDir).Set("/repos/project", "work"); err != nil {
+		t.Fatal(err)
+	}
+	app, stdout, stderr := testApp(configDir, &fakeRunner{})
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"current", "--json"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	var response protocol.CurrentRepository
+	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
+	}
+	if response.ProtocolVersion != 1 || response.Repository != "/repos/project" || !response.Mapped {
+		t.Fatalf("response = %#v", response)
+	}
+	if response.Context == nil || *response.Context != "work" {
+		t.Fatalf("context = %v, want work", response.Context)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "\n  \"protocolVersion\": 1,") {
+		t.Fatalf("stdout is not indented JSON: %q", stdout.String())
+	}
+}
+
+func TestCurrentJSONReportsUnmappedRepositoryAsState(t *testing.T) {
+	app, stdout, stderr := testApp(t.TempDir(), &fakeRunner{})
+	app.repositoryRoot = func(string) (string, error) { return "/repos/project", nil }
+
+	if got := app.Run([]string{"current", "--json"}); got != 0 {
+		t.Fatalf("Run() exit code = %d, want 0", got)
+	}
+	var response protocol.CurrentRepository
+	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v; output=%q", err, stdout.String())
+	}
+	if response.ProtocolVersion != 1 || response.Repository != "/repos/project" || response.Mapped || response.Context != nil {
+		t.Fatalf("response = %#v", response)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }
 
